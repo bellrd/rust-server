@@ -12,7 +12,6 @@ fn sleep(duration: u64) {
     thread::sleep(Duration::from_millis(duration));
 }
 
-
 fn main() {
     let server = TcpListener::bind("127.0.0.1:8080").expect("server not started");
     server
