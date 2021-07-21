@@ -13,7 +13,7 @@ fn generate_id() -> Uuid {
 }
 
 use god::{Connection, StackItem};
-const MAX: usize = 10;
+const MAX: usize = 100;
 
 fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
     let mut data = Vec::new();
@@ -33,6 +33,7 @@ fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
     }
     let size = header[0] & !(1 << 7);
     while data.len() != (size + 1).into() {
+        println!("inside blocking read");
         let mut buffer = [0; 1024];
         match stream.read(&mut buffer) {
             Ok(n) => {
@@ -64,6 +65,10 @@ fn safe_close(stream: &mut TcpStream) -> bool {
         }
     }
     return true;
+}
+
+fn sleep(millis: u64) {
+    thread::sleep(Duration::from_millis(millis));
 }
 
 fn main() {
@@ -101,21 +106,21 @@ fn main() {
                     if msb == 0 {
                         eprintln!("got push");
                         // ********* push *****
-                        if stack.len() == MAX{
-                         eprintln!("but blocking...");
+                        if stack.len() == MAX {
+                            eprintln!("but blocking...");
                             index += 1;
                             continue;
                         }
                         let size = header & !(1 << 7);
                         connection.stream.write(&[0x00]);
                         if safe_close(&mut connection.stream) {
-                            let to_push = StackItem::new(size as usize , data[1..].to_vec());
-                            eprintln!("pushing: {}",to_push);
+                            let to_push = StackItem::new(size as usize, data[1..].to_vec());
+                            eprintln!("pushing: {}", to_push);
                             stack.push(to_push);
-                            connections.remove(index);
                             // index = 0; // restart loop
-                            break;
                         }
+                        connections.remove(index);
+                        break;
                         // ********* push end **
                     } else {
                         //pop
@@ -136,8 +141,8 @@ fn main() {
                         //********* pop end */
                     }
                 }
-                // sleep(100);
             }
+            sleep(10);
         }
     });
 
@@ -147,6 +152,7 @@ fn main() {
         if let Ok((mut socket, _)) = server.accept() {
             {
                 //lock block
+                // println!("got a clinet");
                 let connections = &mut *connection_pool.lock().unwrap();
                 // check if connection is greater than or eq 100
                 // try to remove older client 10s policy
@@ -170,7 +176,7 @@ fn main() {
                     connections.push(Connection::new(socket.try_clone().unwrap(), id.clone()));
                     let dt_connection_pool = Arc::clone(&connection_pool);
                     // dt closure
-                    let dt_closure = move || {
+                    thread::spawn(move || {
                         let data = dt_read(&mut socket);
                         let connections = &mut *dt_connection_pool.lock().unwrap();
                         let mut position = -1;
@@ -184,6 +190,7 @@ fn main() {
                             return;
                         }
                         if data.len() == 0 {
+                            println!("I am causing warning");
                             safe_close(&mut socket);
                             // remove connection after safe closing
                             connections.remove(position as usize);
@@ -194,14 +201,16 @@ fn main() {
                             println!("read data = {}", String::from_utf8_lossy(&data));
                             c.data = Some(data);
                         }
-                    };
+                        return;
+                    });
                     // dt closure end
-                    thread::spawn(dt_closure);
+                    // thread::spawn(dt_closure);
                 } else {
                     socket.write(&[0xff]);
                     safe_close(&mut socket);
                 }
             }
         }
+        sleep(10);
     }
 }
