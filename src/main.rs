@@ -12,11 +12,28 @@ fn generate_id() -> Uuid {
     return Uuid::new_v4();
 }
 
+fn ok_connection(stream: &mut TcpStream) -> bool {
+    let mut buf = [0; 100];
+    stream.set_nonblocking(true);
+    match stream.read(&mut buf) {
+        Ok(n) => {
+            if n == 0 {
+                return false;
+            }
+        }
+        Err(e) => {
+        }
+    }
+    stream.set_nonblocking(false);
+    return true;
+}
+
 use god::{Connection, StackItem};
 const MAX: usize = 100;
 
 fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
     let mut data = Vec::new();
+    let mut buffer = [0; 1024];
     let mut header = [0; 1];
     let peeked_size = stream.peek(&mut header).unwrap();
     if peeked_size == 0 {
@@ -25,8 +42,21 @@ fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
     }
     let msb = header[0] & (1 << 7);
     if msb != 0 {
-        data.push(header[0]);
+        // data.push(header[0]);
         // connection.data = Some(data);
+        // println!("just read pop request");
+        match stream.read(&mut buffer) {
+            Ok(n) => {
+                println!("read {} from pop request", n);
+                for i in 0..n {
+                    data.push(buffer[i]);
+                }
+                return data;
+            }
+            Err(_) => {
+                println!("read error from pop request");
+            }
+        }
         return data;
         // return true;
         //pop mode
@@ -104,7 +134,7 @@ fn main() {
                     let header = data[0];
                     let msb = header & (1 << 7);
                     if msb == 0 {
-                        eprintln!("got push");
+                        // eprintln!("got push");
                         // ********* push *****
                         if stack.len() == MAX {
                             eprintln!("but blocking...");
@@ -124,11 +154,25 @@ fn main() {
                         // ********* push end **
                     } else {
                         //pop
-                        eprintln!("got pop");
+                        // eprintln!("got pop");
                         // ********* pop start *****
                         if stack.len() == 0 {
+                            // let mut buf = [0; 1];
+                            // let t = connection.stream.read(&mut buf).unwrap();
+                            // if t == 0 {
+                            // println!("ha ha ha !!");
+                            // safe_close(&mut connection.stream);
+                            // connections.remove(index);
+                            // break;
+                            // } else {
+                            if !ok_connection(&mut connection.stream){
+                                safe_close(&mut connection.stream);
+                                connections.remove(index);
+                                break;
+                            }
                             index += 1;
                             continue;
+                            // }
                         }
 
                         let mut popped_item = stack.pop().unwrap();
@@ -142,7 +186,7 @@ fn main() {
                     }
                 }
             }
-            sleep(10);
+            sleep(5);
         }
     });
 
@@ -152,8 +196,8 @@ fn main() {
         if let Ok((mut socket, _)) = server.accept() {
             {
                 //lock block
-                // println!("got a clinet");
                 let connections = &mut *connection_pool.lock().unwrap();
+                println!("total connection: {}", connections.len());
                 // check if connection is greater than or eq 100
                 // try to remove older client 10s policy
                 // then add
@@ -166,6 +210,7 @@ fn main() {
                     if now - oldest.connect_time >= 10 {
                         //safe close;
                         // oldest.stream.write(&[0x00]);
+                        println!("remove oldest one");
                         safe_close(&mut oldest.stream);
                         connections.remove(0);
                     }
@@ -211,6 +256,6 @@ fn main() {
                 }
             }
         }
-        sleep(10);
+        // sleep(40);
     }
 }
