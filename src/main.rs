@@ -21,8 +21,7 @@ fn ok_connection(stream: &mut TcpStream) -> bool {
                 return false;
             }
         }
-        Err(e) => {
-        }
+        Err(e) => {}
     }
     stream.set_nonblocking(false);
     return true;
@@ -37,33 +36,26 @@ fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
     let mut header = [0; 1];
     let peeked_size = stream.peek(&mut header).unwrap();
     if peeked_size == 0 {
-        // return false;
         return data;
     }
     let msb = header[0] & (1 << 7);
     if msb != 0 {
-        // data.push(header[0]);
-        // connection.data = Some(data);
-        // println!("just read pop request");
         match stream.read(&mut buffer) {
             Ok(n) => {
-                println!("read {} from pop request", n);
                 for i in 0..n {
                     data.push(buffer[i]);
                 }
                 return data;
             }
             Err(_) => {
+                //handle later
                 println!("read error from pop request");
             }
         }
         return data;
-        // return true;
-        //pop mode
     }
     let size = header[0] & !(1 << 7);
     while data.len() != (size + 1).into() {
-        println!("inside blocking read");
         let mut buffer = [0; 1024];
         match stream.read(&mut buffer) {
             Ok(n) => {
@@ -77,7 +69,6 @@ fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
                 }
             }
             Err(_) => {
-                println!("error in reading data..");
                 data.clear();
                 return data;
             }
@@ -90,7 +81,7 @@ fn safe_close(stream: &mut TcpStream) -> bool {
     match stream.shutdown(Shutdown::Both) {
         Ok(_) => {}
         Err(_) => {
-            println!("safe_close() warning.");
+            println!("un-safe_close() warning.");
             return false;
         }
     }
@@ -114,11 +105,6 @@ fn main() {
     // handler thread
     thread::spawn(move || {
         loop {
-            //acquire lock
-            // then loop over connections if data skip if no data
-            // if data then do your thing remove from connections and safe close
-            //
-
             {
                 let connections = &mut *h_connection_pool.lock().unwrap();
                 let mut index = 0;
@@ -137,7 +123,6 @@ fn main() {
                         // eprintln!("got push");
                         // ********* push *****
                         if stack.len() == MAX {
-                            eprintln!("but blocking...");
                             index += 1;
                             continue;
                         }
@@ -157,28 +142,22 @@ fn main() {
                         // eprintln!("got pop");
                         // ********* pop start *****
                         if stack.len() == 0 {
-                            // let mut buf = [0; 1];
-                            // let t = connection.stream.read(&mut buf).unwrap();
-                            // if t == 0 {
-                            // println!("ha ha ha !!");
-                            // safe_close(&mut connection.stream);
-                            // connections.remove(index);
-                            // break;
-                            // } else {
-                            if !ok_connection(&mut connection.stream){
+                            if !ok_connection(&mut connection.stream) {
                                 safe_close(&mut connection.stream);
                                 connections.remove(index);
                                 break;
                             }
                             index += 1;
                             continue;
-                            // }
                         }
 
                         let mut popped_item = stack.pop().unwrap();
                         eprintln!("popped: {}", popped_item);
                         popped_item.data.insert(0, popped_item.size as u8);
-                        connection.stream.write(popped_item.data.as_mut_slice());
+                        connection
+                            .stream
+                            .write(popped_item.data.as_mut_slice())
+                            .expect("some error in write");
                         safe_close(&mut connection.stream);
                         connections.remove(index);
                         break;
@@ -251,7 +230,7 @@ fn main() {
                     // dt closure end
                     // thread::spawn(dt_closure);
                 } else {
-                    socket.write(&[0xff]);
+                    socket.write(&[0xff]).expect("some unknown error occurred");
                     safe_close(&mut socket);
                 }
             }
