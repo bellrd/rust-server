@@ -2,13 +2,17 @@ use std::fmt;
 use std::net::TcpStream;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::usize;
+
+use uuid::Uuid;
 pub struct Connection {
+    pub id:Uuid,
     pub stream: TcpStream,
     pub connect_time: u64,
+    pub data:Option<Vec<u8>>,
 }
 
 impl Connection{
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new(stream: TcpStream, id:Uuid) -> Self {
         let s = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -16,6 +20,8 @@ impl Connection{
         return Connection {
             stream,
             connect_time: s,
+            data:None,
+            id,
         };
     }
 }
