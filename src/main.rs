@@ -181,6 +181,7 @@ fn main() {
         if let Ok((mut socket, _)) = server.accept() {
             {
                 //lock block
+                socket.set_nonblocking(false).expect("tree tree");
                 let connections = &mut *connection_pool.lock().unwrap();
                 println!("total connection: {}", connections.len());
                 // check if connection is greater than or eq 100
