@@ -34,7 +34,13 @@ fn dt_read(stream: &mut TcpStream) -> Vec<u8> {
     let mut data = Vec::new();
     let mut buffer = [0; 1024];
     let mut header = [0; 1];
-    let peeked_size = stream.peek(&mut header).unwrap();
+    let mut peeked_size = 0;
+    match stream.peek(&mut header) {
+        Ok(n) => {
+            peeked_size = n;
+        }
+        Err(e) => {println!("fail silently")}
+    };
     if peeked_size == 0 {
         return data;
     }
